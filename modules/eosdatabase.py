@@ -6,8 +6,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
-from modules.thermo_loader import scan_thermo_tables
-from modules.thermo_loader import scan_sources
+from modules.thermo_loader import *
 
 
 class EOSDatabase:
@@ -19,6 +18,8 @@ class EOSDatabase:
         self.df_thermo = scan_thermo_tables(dir_data)
 
         self.df_sources = scan_sources(dir_data)
+
+        self.df_eos = scan_eos(dir_data)
     # -------------------------------------------------
     # Basic filtering
     # -------------------------------------------------
@@ -66,10 +67,10 @@ class EOSDatabase:
 
         return sorted(self.df_thermo[field].dropna().unique())
     
-    def print_species(self):
+    def print_species_thermo(self):
 
-        print("Species in database")
-        print("-------------------")
+        print("Species in thermo database")
+        print("--------------------------")
 
         required = ["science_material", "science_formula", "unique_id"]
 
@@ -109,14 +110,13 @@ class EOSDatabase:
 
             print(f"  - {formula} : {citation}")
 
+    def summary_thermo(self):
 
-    def summary(self):
-
-        print("EOSDatabase summary")
-        print("-------------------")
+        print("EOSDatabase summary thermo")
+        print("--------------------------")
         print(f"Rows   : {len(self.df_thermo)}")
         print(f"Columns: {len(self.df_thermo.columns)}")
-        print("-------------------")
+        print("--------------------------")
         if "unique_id" not in self.df_thermo.columns:
             print("No citation column found")
             return
@@ -329,6 +329,96 @@ class EOSDatabase:
 
         if plt_show == True: plt.show()
 
+
+ 
+    def print_species_eos(self):
+
+        print("Species in eos database")
+        print("-----------------------")
+
+        required = ["science_material", "science_formula", "unique_id"]
+
+        missing = [
+            col for col in required
+            if col not in self.df_eos.columns
+        ]
+
+        if missing:
+            print(f"Missing required columns: {missing}")
+            return
+
+        # Keep only relevant columns
+        species = (
+            self.df_eos[
+                ["science_material", "science_formula", "unique_id"]
+            ]
+            .drop_duplicates()
+            .sort_values(["science_material", "science_formula", "unique_id"])
+        )
+
+        current_material = None
+
+        for _, row in species.iterrows():
+
+            material = row["science_material"]
+            formula = row["science_formula"]
+            citation = row["unique_id"]
+
+            # print material header only once
+            if material != current_material:
+
+                print()
+                print(material)
+
+                current_material = material
+
+            print(f"  - {formula} : {citation}")
+
+    def summary_eos(self):
+
+        print("EOSDatabase summary eos")
+        print("-----------------------")
+        print(f"Rows   : {len(self.df_eos)}")
+        print(f"Columns: {len(self.df_eos.columns)}")
+        print("-----------------------")
+        if "unique_id" not in self.df_eos.columns:
+            print("No citation column found")
+            return
+
+        # avoid duplicates
+        cols = ["unique_id"]
+
+        if "science_formula" in self.df_eos.columns:
+            cols.append("science_formula")
+
+        citations = (
+            self.df_eos[cols]
+            .drop_duplicates()
+            .sort_values(cols)
+        )
+
+        for _, row in citations.iterrows():
+
+            if "science_formula" in cols:
+                print(f"{row['unique_id']} ({row['science_formula']})")
+            else:
+                print(row["unique_id"])
+
+
+    def get_eos(self, entry):
+
+        match = self.df_eos[self.df_eos["entry"] == entry]
+
+        if len(match) == 0:
+            raise ValueError(f"No EOS found for {entry}")
+
+        if len(match) > 1:
+            raise ValueError(f"Multiple EOS found for {entry}")
+
+        # convert single row → dict
+        eos = (match.iloc[0].dropna().to_dict())
+
+        return eos
 
     def __repr__(self):
 

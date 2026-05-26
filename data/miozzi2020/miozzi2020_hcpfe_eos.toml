@@ -1,0 +1,36 @@
+unique_id = "miozzi2020"
+
+[science]
+material = "iron"
+formula = "Fe"
+phase = "solid"
+cristal = "hcp"
+method = "DAC"
+
+[description]
+type = "fit"
+cold_type = "bm3"
+thermal_exist = true
+thermal_type = "debye"
+reference_temperature = 300
+
+[validity]
+min_p = 10
+max_p = 150
+min_t = 300
+max_t = 4000
+min_rho = 8
+max_rho = 12
+
+[parameters]
+V_0 = 22.80
+dV_0 = 2
+rho_0 = 8.7
+drho_0 = 0.8
+K_0 = 129
+dK_0 = 6
+K_0_prime = 6.2
+dK_0_prime = 2
+T_0 = 300
+gamma_0 = 1.5
+q_debye = 0.8

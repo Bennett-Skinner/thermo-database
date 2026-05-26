@@ -64,6 +64,61 @@ def load_single_thermo(path_dat: Path) -> pd.DataFrame:
 
     return df
 
+# def load_single_eos(path_toml: Path) -> pd.DataFrame:
+#     """
+#     Load one eos and merge metadata into dataframe columns.
+#     """
+
+#     # -----------------------------
+#     # Read metadata
+#     # -----------------------------
+#     with open(path_toml, "rb") as f:
+#         metadata = tomllib.load(f)
+
+#     delimiter = metadata.get("data", {}).get("delimiter", r"\s+")
+
+#     # -----------------------------
+#     # Read table
+#     # -----------------------------
+#     df = pd.read_csv(
+#         path_toml,
+#         comment="#",
+#         sep=delimiter,
+#         engine="python",
+#     )
+
+#     # -----------------------------
+#     # Add metadata as dataframe columns
+#     # -----------------------------
+
+#     for section_name, section in metadata.items():
+#         # save unique_id
+#         if section_name == "unique_id":
+#             unique_id = section
+#             df["unique_id"] = unique_id
+
+#         # skip non-dictionaries
+#         if not isinstance(section, dict):
+#             continue
+
+#         for key, value in section.items():
+
+#             column_name = f"{section_name}_{key}"
+
+#             df[column_name] = value
+
+
+#     label = (
+#         path_toml.stem          # remove .dat
+#         .replace("_eos", "") # remove suffix
+#         .split("_", 1)[1]       # remove unique_id
+#     )
+#     df["label"] = label
+#     df["entry"] = unique_id+"_"+label
+
+#     return df
+
+
 
 def scan_thermo_tables(dir_data: str | Path) -> pd.DataFrame:
     """
@@ -93,6 +148,49 @@ def scan_thermo_tables(dir_data: str | Path) -> pd.DataFrame:
         return pd.DataFrame()
 
     return pd.concat(dfs, ignore_index=True)
+
+def scan_eos(dir_data):
+    """
+    Scan all folders recursively and merge information about eos.
+    """
+
+    rows = []
+
+    for file in Path(dir_data).rglob("*_eos.toml"):
+        # skip folders starting with _
+        if file.parts[0]=="_":
+            continue
+
+        with open(file,"rb") as f:
+            meta = tomllib.load(f)
+
+        row = {}
+
+        for section, content in meta.items():
+            # save unique_id
+            if section == "unique_id":
+                unique_id = content
+                row["unique_id"] = unique_id
+
+            if not isinstance(content,dict):
+                continue
+
+            for key, value in content.items():
+                row[f"{section}_{key}"] = value
+
+        row["source_file"] = (file.name)
+
+        label = (
+            file.stem          # remove .dat
+            .replace("_eos", "") # remove suffix
+            .split("_", 1)[1]       # remove unique_id
+        )
+        row["label"] = label
+        row["entry"] = row["unique_id"]+"_"+label
+
+        rows.append(row)
+
+    return pd.DataFrame(rows)
 
 
 def scan_sources(dir_data):
