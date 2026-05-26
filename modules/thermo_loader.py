@@ -5,17 +5,17 @@ import pandas as pd
 import tomllib
 
 
-def load_single_thermo(dat_path: Path) -> pd.DataFrame:
+def load_single_thermo(path_dat: Path) -> pd.DataFrame:
     """
     Load one thermo table and merge metadata into dataframe columns.
     """
 
-    toml_path = dat_path.with_suffix(".toml")
+    path_toml = path_dat.with_suffix(".toml")
 
     # -----------------------------
     # Read metadata
     # -----------------------------
-    with open(toml_path, "rb") as f:
+    with open(path_toml, "rb") as f:
         metadata = tomllib.load(f)
 
     delimiter = metadata.get("data", {}).get("delimiter", r"\s+")
@@ -24,7 +24,7 @@ def load_single_thermo(dat_path: Path) -> pd.DataFrame:
     # Read table
     # -----------------------------
     df = pd.read_csv(
-        dat_path,
+        path_dat,
         comment="#",
         sep=delimiter,
         engine="python",
@@ -35,6 +35,10 @@ def load_single_thermo(dat_path: Path) -> pd.DataFrame:
     # -----------------------------
 
     for section_name, section in metadata.items():
+        # save unique_id
+        if section_name == "unique_id":
+            unique_id = section
+            df["unique_id"] = unique_id
 
         # skip non-dictionaries
         if not isinstance(section, dict):
@@ -47,34 +51,78 @@ def load_single_thermo(dat_path: Path) -> pd.DataFrame:
             df[column_name] = value
 
             # useful provenance fields
-            # df["table_path"] = str(dat_path)
-            # df["table_name"] = dat_path.stem
+            # df["table_path"] = str(path_dat)
+            # df["table_name"] = path_dat.stem
+
+    label = (
+        path_dat.stem          # remove .dat
+        .replace("_thermo", "") # remove suffix
+        .split("_", 1)[1]       # remove unique_id
+    )
+    df["label"] = label
+    df["entry"] = unique_id+"_"+label
 
     return df
 
 
-def scan_thermo_tables(data_dir: str | Path) -> pd.DataFrame:
+def scan_thermo_tables(dir_data: str | Path) -> pd.DataFrame:
     """
     Scan all folders recursively and merge thermo tables.
     """
 
-    data_dir = Path(data_dir)
+    dir_data = Path(dir_data)
 
     dfs = []
 
-    for dat_path in data_dir.rglob("*_thermo.dat"):
+    for path_dat in dir_data.rglob("*_thermo.dat"):
+        # skip folders starting with _
+        if path_dat.parts[1].startswith("_"):
+            continue
 
         try:
-            df = load_single_thermo(dat_path)
+            df = load_single_thermo(path_dat)
             dfs.append(df)
 
-            print(f"Loaded: {dat_path}")
+            print(f"Loaded: {path_dat}")
 
         except Exception as e:
-            print(f"Failed loading {dat_path}")
+            print(f"Failed loading {path_dat}")
             print(e)
 
-    if not dfs:
+    if not dfs or len(dfs) == 0:
         return pd.DataFrame()
 
     return pd.concat(dfs, ignore_index=True)
+
+
+def scan_sources(dir_data):
+    """
+    Scan all folders recursively and merge information about sources.
+    """
+
+    rows = []
+
+    for file in Path(dir_data).rglob("*_source.toml"):
+        # skip folders starting with _
+        if file.parts[0]=="_":
+            continue
+
+        with open(file,"rb") as f:
+            meta = tomllib.load(f)
+
+        row = {}
+
+        for section, content in meta.items():
+            if not isinstance(content,dict):
+                continue
+
+            for key, value in content.items():
+                row[f"{section}_{key}"] = value
+
+        row["source_file"] = (file.name)
+
+        rows.append(row)
+
+
+
+    return pd.DataFrame(rows)

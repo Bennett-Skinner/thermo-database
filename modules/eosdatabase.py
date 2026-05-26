@@ -7,16 +7,18 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
 from modules.thermo_loader import scan_thermo_tables
+from modules.thermo_loader import scan_sources
 
 
 class EOSDatabase:
 
-    def __init__(self, data_dir: str):
+    def __init__(self, dir_data: str):
 
-        self.data_dir = data_dir
+        self.dir_data = dir_data
 
-        self.df = scan_thermo_tables(data_dir)
+        self.df_thermo = scan_thermo_tables(dir_data)
 
+        self.df_sources = scan_sources(dir_data)
     # -------------------------------------------------
     # Basic filtering
     # -------------------------------------------------
@@ -30,42 +32,50 @@ class EOSDatabase:
         Return filtered copy.
         """
 
-        new_db = EOSDatabase.__new__(EOSDatabase)
+        db_new = EOSDatabase.__new__(EOSDatabase)
 
-        new_db.data_dir = self.data_dir
+        db_new.dir_data = self.dir_data
 
         mask = (
-            self.df[field]
+            self.df_thermo[field]
             .astype(str)
             .str.contains(contains, case=False, na=False)
         )
 
-        new_db.df = self.df[mask].copy()
+        db_new.df_thermo = self.df_thermo[mask].copy()
 
-        return new_db
+        return db_new
 
     # -------------------------------------------------
     # Convenience methods
     # -------------------------------------------------
 
-    def columns(self):
+    def columns_thermo(self):
 
-        return list(self.df.columns)
+        return list(self.df_thermo.columns)
+    
+    def columns_source(self):
 
-    def unique(self, field: str):
+        return list(self.df_source.columns)
 
-        return sorted(self.df[field].dropna().unique())
+    def unique_thermo(self, field: str):
+
+        return sorted(self.df_thermo[field].dropna().unique())
+    
+    def unique_source(self, field: str):
+
+        return sorted(self.df_thermo[field].dropna().unique())
     
     def print_species(self):
 
         print("Species in database")
         print("-------------------")
 
-        required = ["science_material", "science_formula", "source_citation"]
+        required = ["science_material", "science_formula", "unique_id"]
 
         missing = [
             col for col in required
-            if col not in self.df.columns
+            if col not in self.df_thermo.columns
         ]
 
         if missing:
@@ -74,11 +84,11 @@ class EOSDatabase:
 
         # Keep only relevant columns
         species = (
-            self.df[
-                ["science_material", "science_formula", "source_citation"]
+            self.df_thermo[
+                ["science_material", "science_formula", "unique_id"]
             ]
             .drop_duplicates()
-            .sort_values(["science_material", "science_formula", "source_citation"])
+            .sort_values(["science_material", "science_formula", "unique_id"])
         )
 
         current_material = None
@@ -87,7 +97,7 @@ class EOSDatabase:
 
             material = row["science_material"]
             formula = row["science_formula"]
-            citation = row["source_citation"]
+            citation = row["unique_id"]
 
             # print material header only once
             if material != current_material:
@@ -104,21 +114,21 @@ class EOSDatabase:
 
         print("EOSDatabase summary")
         print("-------------------")
-        print(f"Rows   : {len(self.df)}")
-        print(f"Columns: {len(self.df.columns)}")
+        print(f"Rows   : {len(self.df_thermo)}")
+        print(f"Columns: {len(self.df_thermo.columns)}")
         print("-------------------")
-        if "source_citation" not in self.df.columns:
+        if "unique_id" not in self.df_thermo.columns:
             print("No citation column found")
             return
 
         # avoid duplicates
-        cols = ["source_citation"]
+        cols = ["unique_id"]
 
-        if "science_formula" in self.df.columns:
+        if "science_formula" in self.df_thermo.columns:
             cols.append("science_formula")
 
         citations = (
-            self.df[cols]
+            self.df_thermo[cols]
             .drop_duplicates()
             .sort_values(cols)
         )
@@ -126,22 +136,22 @@ class EOSDatabase:
         for _, row in citations.iterrows():
 
             if "science_formula" in cols:
-                print(f"{row['source_citation']} ({row['science_formula']})")
+                print(f"{row['unique_id']} ({row['science_formula']})")
             else:
-                print(row["source_citation"])
+                print(row["unique_id"])
 
     def export_tsv(
         self,
         filename: str,
-        output_dir: str = "./output",
+        dir_output: str = "./output",
     ):
 
         # ---------------------------------
         # Create output directory if needed
         # ---------------------------------
 
-        output_dir = Path(output_dir)
-        output_dir.mkdir(
+        dir_output = Path(dir_output)
+        dir_output.mkdir(
             parents=True,
             exist_ok=True,
         )
@@ -156,22 +166,22 @@ class EOSDatabase:
             f"{filename}_{today}.tsv"
         )
 
-        output_path = output_dir / output_filename
+        path_output = dir_output / output_filename
 
         # ---------------------------------
         # Export dataframe
         # ---------------------------------
 
-        self.df.to_csv(
-            output_path,
+        self.df_thermo.to_csv(
+            path_output,
             sep="\t",
             index=False,
         )
 
         print()
         print("Export complete")
-        print(f"File: {output_path}")
-        print(f"Rows exported: {len(self.df)}")
+        print(f"File: {path_output}")
+        print(f"Rows exported: {len(self.df_thermo)}")
 
     def plot_rhopt(self,plt_show=True):
 
@@ -183,12 +193,12 @@ class EOSDatabase:
             "rho[g/cm^3]",
             "P[GPa]",
             "T[K]",
-            "source_unique_id",
+            "entry",
         ]
 
         missing = [
             col for col in required
-            if col not in self.df.columns
+            if col not in self.df_thermo.columns
         ]
 
         if missing:
@@ -202,19 +212,19 @@ class EOSDatabase:
         # ---------------------------------
 
         unique_ids = sorted(
-            self.df["source_unique_id"]
+            self.df_thermo["entry"]
             .dropna()
             .unique()
         )
 
         n_ids = len(unique_ids)
 
-        print(f"Found {n_ids} datasets")
+        print(f"Found {n_ids} entries")
 
         if n_ids > 10:
 
             print(
-                "ERROR: More than 10 datasets.\n"
+                "ERROR: More than 10 entries.\n"
                 "Aborting to avoid unreadable plot."
             )
 
@@ -249,8 +259,8 @@ class EOSDatabase:
         # Global temperature normalization
         # ---------------------------------
 
-        Tmin = self.df["T[K]"].min()
-        Tmax = self.df["T[K]"].max()
+        Tmin = self.df_thermo["T[K]"].min()
+        Tmax = self.df_thermo["T[K]"].max()
 
         norm = mcolors.Normalize(
             vmin=Tmin,
@@ -264,8 +274,8 @@ class EOSDatabase:
 
         for marker, uid in zip(markers, unique_ids):
 
-            sub = self.df[
-                self.df["source_unique_id"] == uid
+            sub = self.df_thermo[
+                self.df_thermo["entry"] == uid
             ]
 
             sc = ax.scatter(
@@ -302,7 +312,7 @@ class EOSDatabase:
         # ---------------------------------
 
         ax.legend(
-            title="Dataset",
+            title="Entry",
             fontsize=8,
         )
 
@@ -323,6 +333,6 @@ class EOSDatabase:
     def __repr__(self):
 
         return (
-            f"EOSDatabase(rows={len(self.df)}, "
-            f"columns={len(self.df.columns)})"
+            f"EOSDatabase(rows={len(self.df_thermo)}, "
+            f"columns={len(self.df_thermo.columns)})"
         )

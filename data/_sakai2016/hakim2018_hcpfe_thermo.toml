@@ -1,0 +1,7 @@
+unique_id = "hakim2018"
+
+[science]
+material = "iron"
+formula = "Fe"
+phase = "solid"
+method = "DFT"
